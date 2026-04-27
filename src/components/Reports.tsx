@@ -1,23 +1,21 @@
 import { useMemo } from 'react';
 import { useCRMStore } from '../store/useCRMStore';
-import type { Status } from '../data/companies';
-import { PIPELINE_STAGES } from '../data/companies';
+
+
 import { formatRevenue } from '../lib/utils2';
 
 export function Reports() {
-  const { companies, role } = useCRMStore();
+  const { companies, currentUser, stages } = useCRMStore();
 
-  const visible = role === 'Admin'
-    ? companies
-    : companies.filter(c => c.assignedTo === role || !c.assignedTo);
+  const visible = currentUser?.role === 'admin' ? companies : companies.filter(c => !c.assignedTo || c.assignedTo === currentUser?.name);
 
-  const byStage = useMemo(() => PIPELINE_STAGES.map(s => ({
+  const byStage = useMemo(() => stages.map(s => ({
     ...s,
     companies: visible.filter(c => c.status === s.key),
     revenue: visible.filter(c => c.status === s.key).reduce((sum, c) => sum + c.revenue, 0),
   })), [visible]);
 
-  const maxRev = Math.max(...byStage.map(s => s.revenue), 1);
+  const maxRev = Math.max(...byStage.map((s: {revenue: number}) => s.revenue), 1);
 
   const byCity = useMemo(() => {
     const map: Record<string, { count: number; revenue: number }> = {};
@@ -42,8 +40,8 @@ export function Reports() {
   const maxCityRev = Math.max(...byCity.map(c => c[1].revenue), 1);
   const maxIndRev = Math.max(...byIndustry.map(c => c[1].revenue), 1);
 
-  const totalRevenue = visible.reduce((s, c) => s + c.revenue, 0);
-  const closedRevenue = visible.filter(c => c.status === 'zamkniety').reduce((s, c) => s + c.revenue, 0);
+  const totalRevenue = visible.reduce((s: number, c: {revenue: number}) => s + c.revenue, 0);
+  const closedRevenue = visible.filter(c => c.status === 'zamkniety').reduce((s: number, c: {revenue: number}) => s + c.revenue, 0);
   const conversionRate = visible.length > 0
     ? ((visible.filter(c => c.status === 'zamkniety').length / visible.length) * 100).toFixed(1)
     : '0';
@@ -51,13 +49,9 @@ export function Reports() {
   const totalHistory = visible.reduce((s, c) => s + c.history.length, 0);
   const totalReminders = visible.reduce((s, c) => s + c.reminders.length, 0);
 
-  const STAGE_COLORS: Record<Status, string> = {
-    lead: 'bg-gray-400',
-    kontakt: 'bg-blue-400',
-    oferta: 'bg-amber-400',
-    negocjacje: 'bg-purple-400',
-    zamkniety: 'bg-emerald-400',
-    stracony: 'bg-red-400',
+  const STAGE_COLORS: Record<string, string> = {
+    lead: 'bg-gray-400', kontakt: 'bg-blue-400', oferta: 'bg-amber-400',
+    negocjacje: 'bg-purple-400', zamkniety: 'bg-emerald-400', stracony: 'bg-red-400',
   };
 
   return (

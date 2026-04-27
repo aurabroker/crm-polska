@@ -1,138 +1,121 @@
 import { useState, useEffect } from 'react';
 import { useCRMStore } from './store/useCRMStore';
-import { ROLES } from './data/companies';
 import type { Company } from './data/companies';
 import { Dashboard } from './components/Dashboard';
 import { Pipeline } from './components/Pipeline';
 import { CompanyDrawer } from './components/CompanyDrawer';
 import { Calendar } from './components/Calendar';
 import { Reports } from './components/Reports';
+import { AdminPanel } from './components/AdminPanel';
 
-type View = 'dashboard' | 'pipeline' | 'calendar' | 'reports';
+type View = 'dashboard' | 'pipeline' | 'calendar' | 'reports' | 'admin';
 
-const NAV_ITEMS: { key: View; label: string; icon: string }[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: '◫' },
-  { key: 'pipeline', label: 'Pipeline', icon: '▤' },
-  { key: 'calendar', label: 'Kalendarz', icon: '▦' },
-  { key: 'reports', label: 'Raporty', icon: '▨' },
+const NAV: { key: View; label: string }[] = [
+  { key:'dashboard', label:'Firmy' },
+  { key:'pipeline',  label:'Pipeline' },
+  { key:'calendar',  label:'Kalendarz' },
+  { key:'reports',   label:'Raporty' },
+  { key:'admin',     label:'Admin' },
 ];
 
-const VIEW_TITLES: Record<View, string> = {
-  dashboard: 'Dashboard',
-  pipeline: 'Pipeline Kanban',
-  calendar: 'Kalendarz',
-  reports: 'Raporty',
-};
-
 export default function App() {
-  const { role, setRole, companies, loading, loadData } = useCRMStore();
+  const { currentUser, users, setCurrentUser, companies, loadData, loading } = useCRMStore();
   const [view, setView] = useState<View>('dashboard');
-  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [selectedCompany, setSelectedCompany] = useState<Company|null>(null);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   useEffect(() => { loadData(); }, []);
 
-  const freshCompany = selectedCompany
-    ? companies.find(c => c.id === selectedCompany.id) ?? selectedCompany
-    : null;
+  const freshCompany = selectedCompany ? companies.find(c=>c.id===selectedCompany.id)??selectedCompany : null;
+  const totalReminders = companies.reduce((s,c)=>s+c.reminders.filter(r=>!r.done).length,0);
 
-  const totalReminders = companies.reduce((s, c) => s + c.reminders.filter(r => !r.done).length, 0);
-
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-zinc-950">
-        <div className="text-center">
-          <div className="text-white font-black text-2xl tracking-tight mb-2">CRM</div>
-          <div className="text-zinc-500 text-sm">Ładowanie danych...</div>
-          <div className="mt-4 w-48 h-0.5 bg-zinc-800 mx-auto overflow-hidden">
-            <div className="h-full bg-amber-400 animate-pulse w-full" />
-          </div>
+  if (loading) return (
+    <div className="flex h-screen items-center justify-center bg-zinc-950">
+      <div className="text-center">
+        <div className="text-white font-black text-2xl tracking-tight mb-2">CRM</div>
+        <div className="text-zinc-500 text-sm">Ładowanie...</div>
+        <div className="mt-4 w-48 h-0.5 bg-zinc-800 mx-auto overflow-hidden">
+          <div className="h-full bg-amber-400 animate-pulse w-full"/>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
-    <div className="flex h-screen bg-zinc-100 overflow-hidden font-sans">
-      <aside className="w-52 bg-zinc-950 flex flex-col flex-shrink-0">
-        <div className="p-5 border-b border-zinc-800">
-          <div className="text-white font-black text-lg tracking-tight">CRM</div>
-          <div className="text-zinc-500 text-[10px] uppercase tracking-widest mt-0.5">System sprzedaży</div>
-        </div>
-        <nav className="flex-1 p-3 space-y-0.5">
-          {NAV_ITEMS.map(item => (
-            <button
-              key={item.key}
-              onClick={() => setView(item.key)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-colors text-left ${
-                view === item.key
-                  ? 'bg-white text-zinc-950 font-medium'
-                  : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-              }`}
-            >
-              <span className="text-base w-5 text-center">{item.icon}</span>
-              {item.label}
-              {item.key === 'calendar' && totalReminders > 0 && (
-                <span className="ml-auto bg-amber-400 text-zinc-900 text-[10px] font-bold px-1.5 py-0.5 min-w-[18px] text-center">
-                  {totalReminders}
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
-        <div className="p-3 border-t border-zinc-800">
-          <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-2 px-1">Rola / Użytkownik</div>
-          <div className="space-y-0.5">
-            {ROLES.map(r => (
-              <button
-                key={r}
-                onClick={() => setRole(r)}
-                className={`w-full text-left px-3 py-2 text-xs transition-colors ${
-                  role === r
-                    ? 'bg-amber-400 text-zinc-950 font-bold'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
-                }`}
-              >
-                {r === 'Admin' ? '⚙ Admin' : r === 'Jan Kowalski' ? '👤 Jan Kowalski' : '👤 Anna Nowak'}
-              </button>
-            ))}
+    <div className="flex flex-col h-screen bg-zinc-100 overflow-hidden font-sans">
+      {/* TOP MENU */}
+      <header className="bg-zinc-950 text-white flex-shrink-0">
+        <div className="flex items-center h-12 px-4 gap-0">
+          {/* Logo */}
+          <div className="font-black text-base tracking-tight mr-6 flex-shrink-0">
+            <span className="text-white">CRM</span>
+            <span className="text-amber-400 text-xs font-medium ml-1.5 uppercase tracking-widest">Polska</span>
           </div>
-        </div>
-      </aside>
-
-      <main className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-14 bg-white border-b border-zinc-200 flex items-center justify-between px-6 flex-shrink-0">
-          <h1 className="font-bold text-zinc-900 text-sm uppercase tracking-widest">{VIEW_TITLES[view]}</h1>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => loadData()}
-              className="text-xs text-zinc-400 hover:text-zinc-900 transition-colors px-2 py-1 border border-transparent hover:border-zinc-200"
-              title="Odśwież dane"
-            >
-              ↻ Odśwież
-            </button>
-            <span className="text-xs text-zinc-400">
-              {companies.length} firm · {companies.filter(c => c.status === 'zamkniety').length} zamkniętych
-            </span>
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-zinc-900 text-white text-xs flex items-center justify-center font-bold">
-                {role === 'Admin' ? 'A' : role.split(' ').map(w => w[0]).join('')}
-              </div>
-              <span className="text-sm text-zinc-700 font-medium">{role}</span>
+          {/* Nav */}
+          <nav className="flex h-full">
+            {NAV.map(item => {
+              if (item.key==='admin' && currentUser?.role!=='admin') return null;
+              return (
+                <button key={item.key} onClick={()=>setView(item.key)}
+                  className={`h-full px-4 text-sm font-medium transition-colors relative flex items-center gap-1.5 ${view===item.key?'text-white bg-zinc-800':'text-zinc-400 hover:text-white hover:bg-zinc-900'}`}>
+                  {item.label}
+                  {item.key==='calendar' && totalReminders>0 && (
+                    <span className="bg-amber-400 text-zinc-900 text-[10px] font-bold px-1.5 min-w-[18px] text-center">{totalReminders}</span>
+                  )}
+                  {view===item.key && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-400"/>}
+                </button>
+              );
+            })}
+          </nav>
+          {/* Right side */}
+          <div className="ml-auto flex items-center gap-3">
+            <button onClick={()=>loadData()} className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">↻</button>
+            <span className="text-xs text-zinc-600">{companies.length} firm</span>
+            {/* User switcher */}
+            <div className="relative">
+              <button onClick={()=>setShowUserMenu(p=>!p)}
+                className="flex items-center gap-2 px-2 py-1 hover:bg-zinc-800 transition-colors">
+                <div className="w-7 h-7 flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                  style={{ backgroundColor: currentUser?.color??'#374151' }}>
+                  {currentUser?.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}
+                </div>
+                <span className="text-sm text-zinc-300 hidden sm:block">{currentUser?.name}</span>
+                <span className="text-zinc-500 text-xs">▾</span>
+              </button>
+              {showUserMenu && (
+                <div className="absolute right-0 top-full mt-1 w-52 bg-zinc-900 border border-zinc-700 shadow-xl z-50">
+                  <div className="px-3 py-2 text-xs text-zinc-500 uppercase tracking-widest border-b border-zinc-800">Przełącz użytkownika</div>
+                  {users.map(u => (
+                    <button key={u.id} onClick={()=>{setCurrentUser(u);setShowUserMenu(false);}}
+                      className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm text-left transition-colors ${currentUser?.id===u.id?'bg-zinc-800 text-white':'text-zinc-300 hover:bg-zinc-800'}`}>
+                      <div className="w-6 h-6 flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
+                        style={{ backgroundColor: u.color }}>
+                        {u.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}
+                      </div>
+                      <div>
+                        <div>{u.name}</div>
+                        <div className="text-xs text-zinc-500">{u.role}</div>
+                      </div>
+                      {currentUser?.id===u.id && <span className="ml-auto text-amber-400 text-xs">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-        </header>
-
-        <div className="flex-1 overflow-hidden p-6">
-          {view === 'dashboard' && <Dashboard onSelectCompany={setSelectedCompany} />}
-          {view === 'pipeline' && <Pipeline onSelectCompany={setSelectedCompany} />}
-          {view === 'calendar' && <Calendar onSelectCompany={setSelectedCompany} />}
-          {view === 'reports' && <Reports />}
         </div>
+      </header>
+
+      {/* Content */}
+      <main className="flex-1 overflow-hidden p-5" onClick={()=>showUserMenu&&setShowUserMenu(false)}>
+        {view==='dashboard' && <Dashboard onSelectCompany={setSelectedCompany}/>}
+        {view==='pipeline'  && <Pipeline onSelectCompany={setSelectedCompany}/>}
+        {view==='calendar'  && <Calendar onSelectCompany={setSelectedCompany}/>}
+        {view==='reports'   && <Reports/>}
+        {view==='admin'     && <AdminPanel/>}
       </main>
 
-      {freshCompany && (
-        <CompanyDrawer company={freshCompany} onClose={() => setSelectedCompany(null)} />
-      )}
+      {freshCompany && <CompanyDrawer company={freshCompany} onClose={()=>setSelectedCompany(null)}/>}
     </div>
   );
 }

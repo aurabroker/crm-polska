@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useCRMStore } from '../store/useCRMStore';
 import type { Company, ContactHistory, Reminder } from '../data/companies';
-import { PIPELINE_STAGES } from '../data/companies';
+
 
 import { formatRevenue, formatDateTime, formatDate, HISTORY_TYPE_LABELS, HISTORY_TYPE_ICONS } from '../lib/utils2';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -30,6 +30,7 @@ export function CompanyDrawer({ company, onClose }: CompanyDrawerProps) {
   const [reminderText, setReminderText] = useState('');
   const [reminderDate, setReminderDate] = useState('');
 
+  const { stages } = useCRMStore();
   const handleAddHistory = () => {
     if (!histNote.trim()) return;
     const entry: ContactHistory = {
@@ -75,12 +76,12 @@ export function CompanyDrawer({ company, onClose }: CompanyDrawerProps) {
             <button onClick={onClose} className="text-zinc-400 hover:text-white text-xl leading-none mt-1">✕</button>
           </div>
           <div className="flex items-center gap-3">
-            <Select value={company.status} onValueChange={v => updateCompanyStatus(company.id, v as any)}>
+            <Select value={company.status} onValueChange={v => updateCompanyStatus(company.id, v as Company['status'])}>
               <SelectTrigger className={`h-7 w-36 text-xs rounded-none border-0 font-medium ${STATUS_COLORS[company.status]} focus:ring-0`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="rounded-none">
-                {PIPELINE_STAGES.map(s => (
+                {stages.map(s => (
                   <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
                 ))}
               </SelectContent>
