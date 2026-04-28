@@ -70,36 +70,73 @@ export function Dashboard({ onSelectCompany }: DashboardProps) {
   const handleCSV = async (e:React.ChangeEvent<HTMLInputElement>) => {
     const file=e.target.files?.[0]; if(!file) return;
     setImporting(true); setImportResult(null);
-    const text=await file.text();
-    const lines=text.split('\n').filter(l=>l.trim());
-    const headers=lines[0].split(',').map(h=>h.trim().toLowerCase().replace(/"/g,''));
-    const rows=lines.slice(1).map(line=>{
-      const vals:string[]=[]; let cur='',inQ=false;
-      for(const ch of line){ if(ch==='"'){inQ=!inQ;}else if(ch===','&&!inQ){vals.push(cur.trim());cur='';}else{cur+=ch;} }
-      vals.push(cur.trim());
-      const obj:Record<string,string>={};
-      headers.forEach((h,i)=>{obj[h]=vals[i]?.replace(/^"|"$/g,'') ?? '';});
+    const text = await file.text();
+
+    // Auto-detect separator: średnik lub przecinek
+    const firstLine = text.split(/\r?\n/)[0];
+    const sep = firstLine.includes(';') ? ';' : ',';
+
+    const parseLine = (line: string): string[] => {
+      const vals: string[] = []; let cur = '', inQ = false;
+      for (const ch of line) {
+        if (ch === '"') { inQ = !inQ; }
+        else if (ch === sep && !inQ) { vals.push(cur.trim().replace(/^"|"$/g,'')); cur = ''; }
+        else { cur += ch; }
+      }
+      vals.push(cur.trim().replace(/^"|"$/g,''));
+      return vals;
+    };
+
+    const allLines = text.split(/\r?\n/).filter(l => l.trim());
+
+    // Auto-detect header row: szukaj wiersza który zawiera słowa kluczowe
+    const keywords = ['company','name','nazwa','first','last','telefon','phone','city','miasto','nip'];
+    let headerIdx = 0;
+    for (let i = 0; i < Math.min(5, allLines.length); i++) {
+      const low = allLines[i].toLowerCase();
+      if (keywords.filter(k => low.includes(k)).length >= 2) { headerIdx = i; break; }
+    }
+
+    const headers = parseLine(allLines[headerIdx]).map(h => h.toLowerCase().trim());
+    const dataLines = allLines.slice(headerIdx + 1);
+
+    // Mapowanie nagłówków na pola
+    const find = (obj: Record<string,string>, ...keys: string[]) =>
+      keys.map(k => obj[k] || '').find(Boolean) || '';
+
+    const rows = dataLines.map(line => {
+      const vals = parseLine(line);
+      const obj: Record<string,string> = {};
+      headers.forEach((h, i) => { obj[h] = vals[i] ?? ''; });
+
+      // Połącz First Name + Last Name → contact
+      const firstName = find(obj, 'first name', 'imię', 'imie', 'first');
+      const lastName  = find(obj, 'last name', 'nazwisko', 'last');
+      const contact   = find(obj, 'contact', 'kontakt') ||
+                        [firstName, lastName].filter(Boolean).join(' ');
+
       return {
-        company:   obj.company  ||obj.nazwa     ||obj.name        ||'',
-        contact:   obj.contact  ||obj.kontakt   ||'',
-        title:     obj.title    ||obj.stanowisko ||'',
-        phone:     obj.phone    ||obj.telefon   ||'',
-        email:     obj.email    ||'',
-        city:      obj.city     ||obj.miasto    ||'',
-        state:     obj.state    ||obj.województwo||'',
-        industry:  obj.industry ||obj.branża    ||'',
-        employees: obj.employees||obj.pracownicy||'',
-        revenue:   Number(obj.revenue||obj.przychód||0),
-        url:       obj.url      ||obj.www       ||'',
-        nip:       obj.nip      ||'',
-        regon:     obj.regon    ||'',
-        notes:     obj.notes    ||obj.notatki   ||'',
+        company:   find(obj, 'company name', 'company', 'nazwa', 'name'),
+        contact,
+        title:     find(obj, 'title', 'stanowisko', 'job title'),
+        phone:     find(obj, 'phone', 'telefon', 'tel', 'phone number'),
+        email:     find(obj, 'company email', 'email', 'e-mail', 'mail'),
+        city:      find(obj, 'city', 'miasto', 'city/town'),
+        state:     find(obj, 'state or province', 'state', 'województwo', 'province'),
+        industry:  find(obj, 'industry', 'branża', 'sector'),
+        employees: find(obj, 'employees (total)', 'employees (single site)', 'employees', 'pracownicy'),
+        revenue:   Number(find(obj, 'revenue', 'przychód', 'obrót') || 0),
+        url:       find(obj, 'url', 'www', 'website'),
+        nip:       find(obj, 'nip'),
+        regon:     find(obj, 'regon'),
+        notes:     find(obj, 'notes', 'notatki', 'uwagi'),
       } as Partial<Company>;
-    }).filter(r=>r.company);
+    }).filter(r => r.company && r.company.trim() !== '');
+
     const result = await importCompanies(rows);
     setImportResult(result);
     setImporting(false);
-    if(csvRef.current) csvRef.current.value='';
+    if (csvRef.current) csvRef.current.value = '';
   };
 
   const handleAdd = async () => {
