@@ -17,6 +17,7 @@ export interface Company {
   id: number; company: string; contact: string; title: string;
   phone: string; email: string; city: string; state: string;
   industry: string; revenue: number; employees: string; url: string;
+  nip?: string; regon?: string; notes?: string;
   status: Status; assignedTo?: string; assignedUserId?: string;
   history: ContactHistory[]; reminders: Reminder[];
 }

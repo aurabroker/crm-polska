@@ -27,6 +27,7 @@ export function Dashboard({ onSelectCompany }: DashboardProps) {
   const [newCo, setNewCo] = useState<Record<string,string>>({});
   const [confirmDelete, setConfirmDelete] = useState<number|null>(null);
   const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ imported: number; duplicates: { nip: string[]; regon: string[] }; errors: number } | null>(null);
   const csvRef = useRef<HTMLInputElement>(null);
   const isAdmin = currentUser?.role === 'admin';
   const [nipInput, setNipInput] = useState('');
@@ -68,23 +69,35 @@ export function Dashboard({ onSelectCompany }: DashboardProps) {
 
   const handleCSV = async (e:React.ChangeEvent<HTMLInputElement>) => {
     const file=e.target.files?.[0]; if(!file) return;
-    setImporting(true);
+    setImporting(true); setImportResult(null);
     const text=await file.text();
-    const lines=text.split('\n').filter(Boolean);
+    const lines=text.split('\n').filter(l=>l.trim());
     const headers=lines[0].split(',').map(h=>h.trim().toLowerCase().replace(/"/g,''));
     const rows=lines.slice(1).map(line=>{
-      const vals=line.split(',').map(v=>v.trim().replace(/"/g,''));
+      const vals:string[]=[]; let cur='',inQ=false;
+      for(const ch of line){ if(ch==='"'){inQ=!inQ;}else if(ch===','&&!inQ){vals.push(cur.trim());cur='';}else{cur+=ch;} }
+      vals.push(cur.trim());
       const obj:Record<string,string>={};
-      headers.forEach((h,i)=>{obj[h]=vals[i]??'';});
+      headers.forEach((h,i)=>{obj[h]=vals[i]?.replace(/^"|"$/g,'') ?? '';});
       return {
-        company:obj.company||obj.nazwa||obj.name||'', contact:obj.contact||obj.kontakt||'',
-        phone:obj.phone||obj.telefon||'', email:obj.email||'', city:obj.city||obj.miasto||'',
-        state:obj.state||obj.województwo||'', industry:obj.industry||obj.branża||'',
-        employees:obj.employees||obj.pracownicy||'', revenue:Number(obj.revenue||obj.przychód||0),
-        url:obj.url||obj.www||''
+        company:   obj.company  ||obj.nazwa     ||obj.name        ||'',
+        contact:   obj.contact  ||obj.kontakt   ||'',
+        title:     obj.title    ||obj.stanowisko ||'',
+        phone:     obj.phone    ||obj.telefon   ||'',
+        email:     obj.email    ||'',
+        city:      obj.city     ||obj.miasto    ||'',
+        state:     obj.state    ||obj.województwo||'',
+        industry:  obj.industry ||obj.branża    ||'',
+        employees: obj.employees||obj.pracownicy||'',
+        revenue:   Number(obj.revenue||obj.przychód||0),
+        url:       obj.url      ||obj.www       ||'',
+        nip:       obj.nip      ||'',
+        regon:     obj.regon    ||'',
+        notes:     obj.notes    ||obj.notatki   ||'',
       } as Partial<Company>;
     }).filter(r=>r.company);
-    await importCompanies(rows);
+    const result = await importCompanies(rows);
+    setImportResult(result);
     setImporting(false);
     if(csvRef.current) csvRef.current.value='';
   };
@@ -97,6 +110,24 @@ export function Dashboard({ onSelectCompany }: DashboardProps) {
 
   return (
     <div className="flex flex-col h-full">
+      {/* Import result banner */}
+      {importResult && (
+        <div className={`mb-3 px-4 py-2.5 text-sm flex items-start justify-between border ${importResult.errors > 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-800'}`}>
+          <div className="flex flex-col gap-0.5">
+            <div>
+              ✅ Zaimportowano: <strong>{importResult.imported}</strong> firm
+              {importResult.errors > 0 && <span className="ml-2 text-red-600">❌ Błędy: <strong>{importResult.errors}</strong></span>}
+            </div>
+            {importResult.duplicates.nip.length > 0 && (
+              <div className="text-amber-700 text-xs">⚠ Pominięto duplikaty NIP: <strong>{importResult.duplicates.nip.length}</strong> — {importResult.duplicates.nip.slice(0,5).join(', ')}{importResult.duplicates.nip.length > 5 ? '...' : ''}</div>
+            )}
+            {importResult.duplicates.regon.length > 0 && (
+              <div className="text-amber-700 text-xs">⚠ Pominięto duplikaty REGON: <strong>{importResult.duplicates.regon.length}</strong> — {importResult.duplicates.regon.slice(0,5).join(', ')}{importResult.duplicates.regon.length > 5 ? '...' : ''}</div>
+            )}
+          </div>
+          <button onClick={() => setImportResult(null)} className="text-zinc-400 hover:text-zinc-700 ml-4 flex-shrink-0">✕</button>
+        </div>
+      )}
       {/* Toolbar */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         <Input placeholder="Szukaj firmy, kontaktu, miasta..." value={search} onChange={e=>setSearch(e.target.value)}

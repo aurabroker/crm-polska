@@ -11,6 +11,8 @@ function dbRowToCompany(row: Record<string,unknown>, history: ContactHistory[]=[
     city: (row.city as string) ?? '', state: (row.state as string) ?? '',
     industry: (row.industry as string) ?? '', revenue: (row.revenue as number) ?? 0,
     employees: (row.employees as string) ?? '', url: (row.url as string) ?? '',
+    nip: (row.nip as string) ?? '', regon: (row.regon as string) ?? '',
+    notes: (row.notes as string) ?? '',
     status: (row.status as Company['status']) ?? 'lead',
     assignedTo: (row.assigned_to as string) ?? '',
     assignedUserId: (row.assigned_user_id as string) ?? undefined,
@@ -43,7 +45,7 @@ interface CRMState {
   // Stages
   updateStages: (stages: PipelineStage[]) => Promise<void>;
   // CSV Import
-  importCompanies: (rows: Partial<Company>[]) => Promise<void>;
+  importCompanies: (rows: Partial<Company>[]) => Promise<{ imported: number; duplicates: { nip: string[]; regon: string[] }; errors: number }>;
 }
 
 export const useCRMStore = create<CRMState>()((set, get) => ({
@@ -164,18 +166,69 @@ export const useCRMStore = create<CRMState>()((set, get) => ({
   },
 
   importCompanies: async (rows) => {
-    const maxId = Math.max(0, ...get().companies.map(c => c.id));
-    const toInsert = rows.map((row, i) => ({
-      id: maxId + i + 1, company: row.company ?? '', contact: row.contact ?? '',
-      title: row.title ?? '', phone: row.phone ?? '', email: row.email ?? '',
-      city: row.city ?? '', state: row.state ?? '', industry: row.industry ?? '',
-      revenue: Number(row.revenue) || 0, employees: String(row.employees ?? ''),
-      url: row.url ?? '', status: 'lead' as const, assigned_to: '',
-    }));
-    const { error } = await supabase.from('crm_companies').insert(toInsert);
-    if (!error) {
-      const newCompanies = toInsert.map(r => dbRowToCompany(r));
-      set(state => ({ companies: [...state.companies, ...newCompanies] }));
+    const existing   = get().companies;
+    const dupNips:   string[] = [];
+    const dupRegons: string[] = [];
+    let imported = 0, errors = 0;
+
+    // Build lookup sets from existing data
+    const existingNips   = new Set(existing.map(c => c.nip?.trim()).filter(Boolean));
+    const existingRegons = new Set(existing.map(c => c.regon?.trim()).filter(Boolean));
+
+    for (const row of rows) {
+      if (!row.company?.trim()) continue;
+
+      const nip   = String((row as Record<string,unknown>).nip   ?? '').trim();
+      const regon = String((row as Record<string,unknown>).regon ?? '').trim();
+
+      // Check duplicates BEFORE insert
+      if (nip && existingNips.has(nip)) {
+        dupNips.push(nip);
+        continue;
+      }
+      if (regon && existingRegons.has(regon)) {
+        dupRegons.push(regon);
+        continue;
+      }
+
+      const maxId = Math.max(0, ...get().companies.map(c => c.id));
+      const newRow = {
+        id: maxId + 1,
+        company:     row.company ?? '',
+        contact:     row.contact ?? '',
+        title:       row.title ?? '',
+        phone:       row.phone ?? '',
+        email:       row.email ?? '',
+        city:        row.city ?? '',
+        state:       row.state ?? '',
+        industry:    row.industry ?? '',
+        revenue:     Number(row.revenue) || 0,
+        employees:   String(row.employees ?? ''),
+        url:         row.url ?? '',
+        nip,
+        regon,
+        notes:       String((row as Record<string,unknown>).notes ?? ''),
+        status:      'lead' as const,
+        assigned_to: '',
+      };
+
+      const { error } = await supabase.from('crm_companies').insert(newRow);
+      if (error) {
+        // Catch DB-level unique constraint violation (safety net)
+        if (error.code === '23505') {
+          if (error.message.includes('nip'))   dupNips.push(nip);
+          if (error.message.includes('regon')) dupRegons.push(regon);
+        } else {
+          errors++;
+        }
+      } else {
+        set(state => ({ companies: [...state.companies, dbRowToCompany(newRow)] }));
+        if (nip)   existingNips.add(nip);
+        if (regon) existingRegons.add(regon);
+        imported++;
+      }
     }
+
+    return { imported, duplicates: { nip: dupNips, regon: dupRegons }, errors };
   },
 }));
