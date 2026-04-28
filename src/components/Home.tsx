@@ -15,26 +15,25 @@ function WorldClock() {
   const [now, setNow] = useState(new Date());
   useEffect(() => { const t = setInterval(()=>setNow(new Date()), 1000); return ()=>clearInterval(t); }, []);
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex items-center gap-2">
       {ZONES.map(z => {
-        const time = now.toLocaleTimeString('pl-PL', { timeZone: z.tz, hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false });
-        const [h,m,s] = time.split(':');
+        const time = now.toLocaleTimeString('pl-PL', { timeZone: z.tz, hour:'2-digit', minute:'2-digit', hour12:false });
+        const [h, m] = time.split(':');
         return (
-          <div key={z.tz} className="flex items-center gap-2">
-            <span className="text-zinc-500 text-xs uppercase tracking-widest hidden xl:block">{z.label}</span>
+          <div key={z.tz} className="flex flex-col items-center bg-white border-2 border-zinc-800 px-3 py-2 min-w-[80px]">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-1">{z.label}</span>
             <div className="flex items-center font-mono">
-              {[h,m,s].map((seg,i) => (
+              {[h, m].map((seg, i) => (
                 <span key={i} className="flex items-center">
                   <span className="inline-flex">
-                    {seg.split('').map((ch,j) => (
-                      <span key={j} className="inline-block bg-zinc-800 text-amber-400 text-xs font-bold px-1 py-0.5 mx-px leading-tight min-w-[14px] text-center">{ch}</span>
+                    {seg.split('').map((ch, j) => (
+                      <span key={j} className="inline-block text-2xl font-black text-zinc-900 leading-none w-[16px] text-center">{ch}</span>
                     ))}
                   </span>
-                  {i<2 && <span className="text-zinc-500 text-xs mx-0.5 font-bold">:</span>}
+                  {i === 0 && <span className="text-zinc-400 text-xl font-black mx-0.5 leading-none">:</span>}
                 </span>
               ))}
             </div>
-            <span className="text-zinc-500 text-xs uppercase tracking-widest xl:hidden">{z.label.slice(0,3)}</span>
           </div>
         );
       })}

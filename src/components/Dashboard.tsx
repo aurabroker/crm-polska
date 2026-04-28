@@ -35,7 +35,20 @@ export function Dashboard({ onSelectCompany }: DashboardProps) {
   const csvRef = useRef<HTMLInputElement>(null);
   const isAdmin = currentUser?.role === 'admin';
 
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const visible = isAdmin ? companies : companies.filter(c => !c.assignedTo || c.assignedTo === currentUser?.name);
+
+  const searchSuggestions = useMemo(() => {
+    if (!search.trim() || search.length < 2) return [];
+    const q = search.toLowerCase().trim();
+    const matches = visible.filter(c =>
+      c.company.toLowerCase().includes(q) ||
+      (c.nip??'').includes(q) ||
+      (c.regon??'').includes(q) ||
+      (c.contact??'').toLowerCase().includes(q)
+    ).slice(0, 8);
+    return matches;
+  }, [visible, search]);
   const cities     = useMemo(() => ['all',...Array.from(new Set(visible.map(c=>c.city))).filter(Boolean).sort()], [visible]);
   const industries = useMemo(() => ['all',...Array.from(new Set(visible.map(c=>c.industry))).filter(Boolean).sort()], [visible]);
 
@@ -156,10 +169,32 @@ export function Dashboard({ onSelectCompany }: DashboardProps) {
       <div className="flex items-center gap-2 mb-3 flex-wrap">
         <div className="relative">
           <input placeholder="Szukaj: nazwa, NIP, REGON, tel, email..." value={search}
-            onChange={e=>{setSearch(e.target.value);setPage(1);}}
-            className="w-72 h-9 border-2 border-zinc-300 px-3 pl-8 text-sm focus:outline-none focus:border-zinc-900 bg-white"/>
+            onChange={e=>{setSearch(e.target.value);setPage(1);setShowSuggestions(true);}}
+            onFocus={()=>setShowSuggestions(true)}
+            onBlur={()=>setTimeout(()=>setShowSuggestions(false),150)}
+            className="w-80 h-9 border-2 border-zinc-300 px-3 pl-8 text-sm focus:outline-none focus:border-zinc-900 bg-white"/>
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">🔍</span>
-          {search && <button onClick={()=>{setSearch('');setPage(1);}} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 text-xs">✕</button>}
+          {search && <button onClick={()=>{setSearch('');setPage(1);setShowSuggestions(false);}} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 text-xs">✕</button>}
+          {showSuggestions && searchSuggestions.length > 0 && (
+            <div className="absolute z-50 top-full left-0 w-96 bg-white border-2 border-zinc-900 shadow-xl mt-px">
+              {searchSuggestions.map(co => (
+                <button key={co.id} onMouseDown={()=>{setSearch(co.company);setPage(1);setShowSuggestions(false);onSelectCompany(co);}}
+                  className="w-full text-left px-3 py-2 hover:bg-zinc-50 border-b border-zinc-100 last:border-0 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-zinc-900 truncate">{co.company}</div>
+                    <div className="text-xs text-zinc-400 truncate">{[co.city, co.industry].filter(Boolean).join(' · ')}{co.nip ? ` · NIP: ${co.nip}` : ''}</div>
+                  </div>
+                  <span className={`text-[10px] px-1.5 py-0.5 font-medium flex-shrink-0 ${
+                    co.status==='zamkniety'?'bg-emerald-100 text-emerald-700':
+                    co.status==='kontakt'?'bg-blue-100 text-blue-700':
+                    co.status==='oferta'?'bg-amber-100 text-amber-700':
+                    'bg-gray-100 text-gray-600'}`}>
+                    {co.status}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <select value={filterStatus} onChange={e=>{setFilterStatus(e.target.value);setPage(1);}} className={selClass}>
