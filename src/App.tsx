@@ -10,10 +10,12 @@ import { CompanyDrawer } from './components/CompanyDrawer';
 import { Calendar } from './components/Calendar';
 import { Reports } from './components/Reports';
 import { AdminPanel } from './components/AdminPanel';
+import { Home } from './components/Home';
 
-type View = 'dashboard' | 'pipeline' | 'calendar' | 'reports' | 'admin';
+type View = 'home' | 'dashboard' | 'pipeline' | 'calendar' | 'reports' | 'admin';
 
 const NAV: { key: View; label: string }[] = [
+  { key:'home',      label:'HOME' },
   { key:'dashboard', label:'Firmy' },
   { key:'pipeline',  label:'Pipeline' },
   { key:'calendar',  label:'Kalendarz' },
@@ -47,7 +49,7 @@ export default function App() {
 
 function CRMApp() {
   const { currentUser, users, setCurrentUser, companies, loadData, loading } = useCRMStore();
-  const [view, setView]                       = useState<View>('dashboard');
+  const [view, setView]                       = useState<View>('home');
   const [selectedCompany, setSelectedCompany] = useState<Company|null>(null);
   const [showUserMenu, setShowUserMenu]       = useState(false);
 
@@ -85,7 +87,7 @@ function CRMApp() {
         <div className="flex items-center h-12 px-4">
           <div className="font-black text-base tracking-tight mr-6 flex-shrink-0">
             <span className="text-white">CRM</span>
-            <span className="text-amber-400 text-xs font-medium ml-1.5 uppercase tracking-widest">Polska</span>
+            <span className="text-amber-400 text-xs font-medium ml-1.5 uppercase tracking-widest">AURA</span>
           </div>
 
           <nav className="flex h-full">
@@ -150,6 +152,7 @@ function CRMApp() {
       </header>
 
       <main className="flex-1 overflow-hidden p-5" onClick={() => showUserMenu && setShowUserMenu(false)}>
+        {view === 'home'      && <Home onSelectCompany={setSelectedCompany}/>}
         {view === 'dashboard' && <Dashboard onSelectCompany={setSelectedCompany}/>}
         {view === 'pipeline'  && <Pipeline onSelectCompany={setSelectedCompany}/>}
         {view === 'calendar'  && <Calendar onSelectCompany={setSelectedCompany}/>}

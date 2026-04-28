@@ -26,6 +26,7 @@ export function Dashboard({ onSelectCompany }: DashboardProps) {
   const [showAdd, setShowAdd] = useState(false);
   const [newCo, setNewCo] = useState<Record<string,string>>({});
   const [confirmDelete, setConfirmDelete] = useState<number|null>(null);
+  const [hideLost, setHideLost] = useState(true);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ imported: number; duplicates: { nip: string[]; regon: string[] }; errors: number } | null>(null);
   const csvRef = useRef<HTMLInputElement>(null);
@@ -53,9 +54,13 @@ export function Dashboard({ onSelectCompany }: DashboardProps) {
 
   const filtered = useMemo(() => {
     let r = visible;
-    if (search) r = r.filter(c=>`${c.company} ${c.contact} ${c.city}`.toLowerCase().includes(search.toLowerCase()));
+    if (search) {
+      const q = search.toLowerCase().trim();
+      r = r.filter(c => `${c.company} ${c.contact} ${c.city}`.toLowerCase().includes(q) || (c.nip??'').includes(q) || (c.regon??'').includes(q) || (c.phone??'').replace(/\D/g,'').includes(q.replace(/\D/g,'')) || (c.email??'').toLowerCase().includes(q));
+    }
     if (filterCity!=='all') r = r.filter(c=>c.city===filterCity);
     if (filterIndustry!=='all') r = r.filter(c=>c.industry===filterIndustry);
+    if (hideLost && filterStatus==='all') r = r.filter(c=>c.status!=='stracony');
     if (filterStatus!=='all') r = r.filter(c=>c.status===filterStatus);
     return [...r].sort((a,b) => {
       if (sortKey==='employees') { const va=parseInt(a.employees||'0')||0,vb=parseInt(b.employees||'0')||0; return sortDir==='asc'?va-vb:vb-va; }
@@ -167,7 +172,7 @@ export function Dashboard({ onSelectCompany }: DashboardProps) {
       )}
       {/* Toolbar */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
-        <Input placeholder="Szukaj firmy, kontaktu, miasta..." value={search} onChange={e=>setSearch(e.target.value)}
+        <Input placeholder="Szukaj: firma, NIP, REGON, tel, email..." value={search} onChange={e=>setSearch(e.target.value)}
           className="w-56 h-9 text-sm rounded-none border-zinc-200 focus-visible:ring-0 focus-visible:border-zinc-900"/>
         <Select value={filterCity} onValueChange={setFilterCity}>
           <SelectTrigger className="w-36 h-9 text-sm rounded-none border-zinc-200 focus:ring-0"><SelectValue/></SelectTrigger>
@@ -185,6 +190,10 @@ export function Dashboard({ onSelectCompany }: DashboardProps) {
           <button onClick={()=>{setSearch('');setFilterCity('all');setFilterIndustry('all');setFilterStatus('all');}}
             className="h-9 px-3 text-xs text-zinc-500 hover:text-zinc-900 border border-zinc-200 hover:border-zinc-900">Wyczyść</button>}
         <div className="ml-auto flex gap-2">
+          <label className="flex items-center gap-1.5 text-xs text-zinc-600 cursor-pointer select-none border border-zinc-200 px-2 h-9 hover:border-zinc-900 transition-colors mr-1">
+            <input type="checkbox" checked={hideLost} onChange={e=>setHideLost(e.target.checked)} className="accent-zinc-900"/>
+            Ukryj stracone
+          </label>
           <label className={`h-9 px-3 text-xs flex items-center gap-1.5 border cursor-pointer transition-colors ${importing?'border-zinc-200 text-zinc-300':'border-zinc-300 text-zinc-600 hover:border-zinc-900 hover:text-zinc-900'}`}>
             <span>↑</span> {importing?'Importuję...':'Import CSV'}
             <input ref={csvRef} type="file" accept=".csv" className="hidden" onChange={handleCSV} disabled={importing}/>
