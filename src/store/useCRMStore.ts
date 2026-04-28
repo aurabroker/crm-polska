@@ -70,9 +70,9 @@ export const useCRMStore = create<CRMState>()((set, get) => ({
   loadData: async () => {
     set({ loading: true });
     const [{ data: cos }, { data: hist }, { data: rems }, { data: usrs }, { data: stgs }, { data: ctcs }, { data: evts }] = await Promise.all([
-      supabase.from('crm_companies').select('*').order('company'),
-      supabase.from('crm_history').select('*').order('created_at', { ascending: false }),
-      supabase.from('crm_reminders').select('*').order('date'),
+      supabase.from('crm_companies').select('*').order('company').limit(10000),
+      supabase.from('crm_history').select('*').order('created_at', { ascending: false }).limit(50000),
+      supabase.from('crm_reminders').select('*').order('date').limit(10000),
       supabase.from('crm_users').select('*').order('name'),
       supabase.from('crm_settings').select('*'),
       supabase.from('crm_contacts').select('*').order('name'),

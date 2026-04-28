@@ -1,67 +1,84 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useCRMStore } from '../store/useCRMStore';
-import type { Company, Status } from '../data/companies';
+import type { Company } from '../data/companies';
 
 interface PipelineProps { onSelectCompany: (c: Company) => void; }
 
-export function Pipeline({ onSelectCompany }: PipelineProps) {
-  const { companies, stages, currentUser, updateCompanyStatus } = useCRMStore();
-  const [dragId, setDragId] = useState<number|null>(null);
-  const [dragOver, setDragOver] = useState<Status|null>(null);
+const STATUS_BG: Record<string,string> = {
+  lead:'bg-gray-50', kontakt:'bg-blue-50', oferta:'bg-amber-50',
+  negocjacje:'bg-purple-50', zamkniety:'bg-emerald-50', stracony:'bg-red-50',
+};
+const STATUS_HEADER: Record<string,string> = {
+  lead:'bg-gray-600', kontakt:'bg-blue-600', oferta:'bg-amber-500',
+  negocjacje:'bg-purple-600', zamkniety:'bg-emerald-600', stracony:'bg-red-600',
+};
 
-  const visible = currentUser?.role==='admin' ? companies : companies.filter(c=>!c.assignedTo||c.assignedTo===currentUser?.name);
-  const byStage = (key:Status) => visible.filter(c=>c.status===key);
+export function Pipeline({ onSelectCompany }: PipelineProps) {
+  const { companies, stages, updateCompanyStatus } = useCRMStore();
+  const [search, setSearch] = useState('');
+  const [dragging, setDragging] = useState<number|null>(null);
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return companies;
+    const q = search.toLowerCase();
+    return companies.filter(c =>
+      c.company.toLowerCase().includes(q) ||
+      (c.contact??'').toLowerCase().includes(q) ||
+      (c.nip??'').includes(q) ||
+      (c.city??'').toLowerCase().includes(q)
+    );
+  }, [companies, search]);
+
+  const byStage = (key: string) => filtered.filter(c => c.status === key);
 
   return (
-    <div className="flex gap-3 h-full overflow-x-auto pb-2">
-      {stages.map(stage => {
-        const cards = byStage(stage.key);
-        const isOver = dragOver===stage.key;
-        const totalEmp = cards.reduce((s,c)=>s+(parseInt(c.employees||'0')||0),0);
-        return (
-          <div key={stage.key} className="flex-shrink-0 w-56 flex flex-col"
-            onDragOver={e=>{e.preventDefault();setDragOver(stage.key);}}
-            onDragLeave={()=>setDragOver(null)}
-            onDrop={e=>{e.preventDefault();if(dragId!==null)updateCompanyStatus(dragId,stage.key);setDragId(null);setDragOver(null);}}>
-            {/* Column header */}
-            <div className="bg-white border border-zinc-200 p-3 mb-2" style={{ borderTopWidth:3, borderTopColor:stage.color }}>
-              <div className="flex items-center justify-between mb-0.5">
-                <span className="font-semibold text-sm text-zinc-900">{stage.label}</span>
-                <span className="text-xs font-medium px-1.5 py-0.5 text-white" style={{ backgroundColor:stage.color }}>{cards.length}</span>
-              </div>
-              {totalEmp>0&&<div className="text-xs text-zinc-400 font-mono">👥 {totalEmp.toLocaleString('pl-PL')}</div>}
-            </div>
-            {/* Cards */}
-            <div className={`flex-1 overflow-y-auto space-y-2 min-h-16 p-1 transition-colors ${isOver?'bg-amber-50 ring-2 ring-amber-300 ring-inset ring-rounded':''}`}>
-              {cards.map(company=>(
-                <div key={company.id} draggable
-                  onDragStart={e=>{setDragId(company.id);e.dataTransfer.effectAllowed='move';}}
-                  onDragEnd={()=>{setDragId(null);setDragOver(null);}}
-                  onClick={()=>onSelectCompany(company)}
-                  className={`bg-white border border-zinc-200 p-3 cursor-pointer hover:border-zinc-900 hover:shadow-sm transition-all select-none ${dragId===company.id?'opacity-40':''}`}>
-                  <div className="font-medium text-xs text-zinc-900 leading-tight mb-1 line-clamp-2">{company.company}</div>
-                  {company.contact&&<div className="text-xs text-zinc-400 mb-1.5">{company.contact}</div>}
-                  {company.employees&&(
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs text-zinc-400">👥</span>
-                      <span className="text-sm font-mono font-bold text-zinc-800">{Number(company.employees).toLocaleString('pl-PL')}</span>
+    <div className="flex flex-col h-full">
+      <div className="flex items-center gap-3 mb-4 flex-shrink-0">
+        <div className="relative">
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Szukaj w pipeline..."
+            className="w-64 h-9 border-2 border-zinc-300 px-3 pl-8 text-sm focus:outline-none focus:border-zinc-900 bg-white"/>
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">🔍</span>
+          {search && <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 text-xs">✕</button>}
+        </div>
+        <span className="text-xs text-zinc-500">{filtered.length} firm</span>
+      </div>
+
+      <div className="flex-1 overflow-x-auto">
+        <div className="flex gap-3 h-full min-w-max">
+          {stages.map(stage => {
+            const cards = byStage(stage.key);
+            return (
+              <div key={stage.key} className={`flex flex-col w-64 rounded-none border border-zinc-200 ${STATUS_BG[stage.key]}`}
+                onDragOver={e => e.preventDefault()}
+                onDrop={() => { if (dragging != null) { updateCompanyStatus(dragging, stage.key as Company['status']); setDragging(null); } }}>
+                <div className={`px-3 py-2.5 text-white flex items-center justify-between ${STATUS_HEADER[stage.key]}`}>
+                  <span className="text-xs font-bold uppercase tracking-widest">{stage.label}</span>
+                  <span className="text-xs bg-white/20 px-2 py-0.5 font-mono">{cards.length}</span>
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                  {cards.map(c => (
+                    <div key={c.id} draggable
+                      onDragStart={() => setDragging(c.id)}
+                      onDragEnd={() => setDragging(null)}
+                      onClick={() => onSelectCompany(c)}
+                      className="bg-white border border-zinc-200 p-3 cursor-pointer hover:border-zinc-400 hover:shadow-sm transition-all select-none">
+                      <div className="font-semibold text-zinc-900 text-sm leading-tight mb-1">{c.company}</div>
+                      {c.contact && <div className="text-xs text-zinc-500 mb-1">{c.contact}</div>}
+                      <div className="flex gap-2 text-[10px] text-zinc-400 flex-wrap">
+                        {c.city && <span>{c.city}</span>}
+                        {c.industry && <span>· {c.industry}</span>}
+                        {c.employees && <span>· {c.employees} os.</span>}
+                      </div>
                     </div>
-                  )}
-                  <div className="text-xs text-zinc-400 mt-1">{company.city}</div>
-                  {company.reminders.filter(r=>!r.done).length>0&&(
-                    <div className="mt-1.5 text-xs text-amber-600 font-medium">🔔 {company.reminders.filter(r=>!r.done).length}</div>
-                  )}
+                  ))}
+                  {cards.length === 0 && <div className="text-xs text-zinc-300 text-center py-6">Brak firm</div>}
                 </div>
-              ))}
-              {cards.length===0&&(
-                <div className={`flex items-center justify-center h-14 text-xs border border-dashed ${isOver?'border-amber-300 text-amber-400':'border-zinc-200 text-zinc-300'}`}>
-                  {isOver?'Upuść tutaj':'—'}
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

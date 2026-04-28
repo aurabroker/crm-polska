@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useCRMStore } from '../store/useCRMStore';
 import type { Company, CRMEvent } from '../data/companies';
 import { Input } from '@/components/ui/input';
@@ -26,6 +26,14 @@ export function Calendar({ onSelectCompany }: CalendarProps) {
   const [showForm, setShowForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CRMEvent|null>(null);
   const [evForm, setEvForm]   = useState({ title:'', type:'spotkanie' as CRMEvent['type'], dateStart:'', dateEnd:'', location:'', notes:'' });
+  const [companySearch, setCompanySearch] = useState('');
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number|null>(null);
+
+  const companySuggestions = useMemo(() => {
+    if (!companySearch.trim()) return [];
+    const q = companySearch.toLowerCase();
+    return companies.filter((co: Company) => co.company.toLowerCase().includes(q)).slice(0,6);
+  }, [companies, companySearch]);
 
   // Alert — migający pasek
   const [alertEvent, setAlertEvent] = useState<CRMEvent|null>(null);
@@ -73,6 +81,7 @@ export function Calendar({ onSelectCompany }: CalendarProps) {
       setEvForm({ title:ev.title, type:ev.type, dateStart:ev.dateStart.slice(0,16), dateEnd:ev.dateEnd?.slice(0,16)??'', location:ev.location, notes:ev.notes });
     } else {
       setEditingEvent(null);
+      setSelectedCompanyId(null); setCompanySearch('');
       const def = dateStr ? `${dateStr}T09:00` : new Date().toISOString().slice(0,16);
       setEvForm({ title:'', type:'spotkanie', dateStart:def, dateEnd:'', location:'', notes:'' });
     }
@@ -82,9 +91,9 @@ export function Calendar({ onSelectCompany }: CalendarProps) {
   const saveEvent = async () => {
     if (!evForm.title.trim()||!evForm.dateStart) return;
     if (editingEvent) {
-      await updateEvent(editingEvent.id, { title:evForm.title, type:evForm.type, dateStart:new Date(evForm.dateStart).toISOString(), dateEnd:evForm.dateEnd?new Date(evForm.dateEnd).toISOString():undefined, location:evForm.location, notes:evForm.notes });
+      await updateEvent(editingEvent.id, { title:evForm.title, type:evForm.type, dateStart:new Date(evForm.dateStart).toISOString(), dateEnd:evForm.dateEnd?new Date(evForm.dateEnd).toISOString():undefined, location:evForm.location, notes:evForm.notes, companyId:selectedCompanyId??undefined });
     } else {
-      await addEvent({ title:evForm.title, type:evForm.type, dateStart:new Date(evForm.dateStart).toISOString(), dateEnd:evForm.dateEnd?new Date(evForm.dateEnd).toISOString():undefined, location:evForm.location, notes:evForm.notes, done:false, createdBy:currentUser?.name??'' });
+      await addEvent({ title:evForm.title, type:evForm.type, dateStart:new Date(evForm.dateStart).toISOString(), dateEnd:evForm.dateEnd?new Date(evForm.dateEnd).toISOString():undefined, location:evForm.location, notes:evForm.notes, done:false, createdBy:currentUser?.name??'', companyId:selectedCompanyId??undefined });
     }
     setShowForm(false);
   };
@@ -202,6 +211,24 @@ export function Calendar({ onSelectCompany }: CalendarProps) {
               <button onClick={()=>setShowForm(false)} className="text-zinc-400 hover:text-white text-lg">✕</button>
             </div>
             <div className="p-5 space-y-3">
+              <div className="relative">
+                <div className="text-xs text-zinc-500 mb-1">Klient / firma *</div>
+                <input value={companySearch} onChange={e=>{setCompanySearch(e.target.value);setSelectedCompanyId(null);}}
+                  placeholder="Zacznij pisać nazwę firmy..."
+                  className={`w-full h-9 border px-3 text-sm focus:outline-none ${selectedCompanyId?'border-emerald-400 bg-emerald-50':'border-zinc-200 focus:border-zinc-900'}`}/>
+                {selectedCompanyId && <div className="text-xs text-emerald-600 mt-0.5">✓ {companies.find(c=>c.id===selectedCompanyId)?.company}</div>}
+                {companySuggestions.length>0 && !selectedCompanyId && (
+                  <div className="absolute z-10 top-full left-0 right-0 bg-white border border-zinc-200 shadow-lg">
+                    {companySuggestions.map(c=>(
+                      <button key={c.id} onClick={()=>{setSelectedCompanyId(c.id);setCompanySearch(c.company);}}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-zinc-50 border-b border-zinc-100 last:border-0">
+                        <div className="font-medium text-zinc-800">{c.company}</div>
+                        <div className="text-xs text-zinc-400">{c.city||''}{c.industry?` · ${c.industry}`:''}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div>
                 <div className="text-xs text-zinc-500 mb-1">Tytuł *</div>
                 <Input value={evForm.title} onChange={EF('title')} placeholder="np. Spotkanie z klientem" className="h-9 text-sm rounded-none border-zinc-200 focus-visible:ring-0 focus-visible:border-zinc-900"/>
@@ -242,7 +269,7 @@ export function Calendar({ onSelectCompany }: CalendarProps) {
                 : <div/>}
               <div className="flex gap-2">
                 <button onClick={()=>setShowForm(false)} className="px-4 py-2 text-sm border border-zinc-200 text-zinc-600 hover:border-zinc-900">Anuluj</button>
-                <button onClick={saveEvent} disabled={!evForm.title.trim()||!evForm.dateStart} className="px-4 py-2 text-sm bg-zinc-900 text-white hover:bg-zinc-700 disabled:opacity-40">Zapisz</button>
+                <button onClick={saveEvent} disabled={!evForm.title.trim()||!evForm.dateStart||!selectedCompanyId} className="px-4 py-2 text-sm bg-zinc-900 text-white hover:bg-zinc-700 disabled:opacity-40">Zapisz</button>
               </div>
             </div>
           </div>
