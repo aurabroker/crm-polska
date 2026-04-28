@@ -93,10 +93,9 @@ export const useCRMStore = create<CRMState>()((set, get) => ({
   },
 
   addCompany: async (data) => {
-    const maxId = Math.max(0, ...get().companies.map(c => c.id));
-    const row = { id: maxId+1, company: data.company??'', contact: data.contact??'', title: data.title??'', phone: data.phone??'', email: data.email??'', city: data.city??'', state: data.state??'', industry: data.industry??'', revenue: data.revenue??0, employees: data.employees??'', url: data.url??'', nip: (data as Record<string,unknown>).nip as string??'', regon: (data as Record<string,unknown>).regon as string??'', notes: (data as Record<string,unknown>).notes as string??'', status: data.status??'lead', assigned_to: data.assignedTo??'' };
-    const { error } = await supabase.from('crm_companies').insert(row);
-    if (!error) set(state => ({ companies: [...state.companies, dbRowToCompany(row)] }));
+    const row = { company: data.company??'', contact: data.contact??'', title: data.title??'', phone: data.phone??'', email: data.email??'', city: data.city??'', state: data.state??'', industry: data.industry??'', revenue: data.revenue??0, employees: data.employees??'', url: data.url??'', nip: (data as Record<string,unknown>).nip as string??'', regon: (data as Record<string,unknown>).regon as string??'', notes: (data as Record<string,unknown>).notes as string??'', status: data.status??'lead', assigned_to: data.assignedTo??'' };
+    const { data: inserted, error } = await supabase.from('crm_companies').insert(row).select().single();
+    if (!error && inserted) set(state => ({ companies: [...state.companies, dbRowToCompany(inserted as Record<string,unknown>)] }));
   },
 
   deleteCompany: async (id) => {
@@ -225,14 +224,13 @@ export const useCRMStore = create<CRMState>()((set, get) => ({
       const regon = String((row as Record<string,unknown>).regon ?? '').trim();
       if (nip && existingNips.has(nip))     { dupNips.push(nip);   continue; }
       if (regon && existingRegons.has(regon)) { dupRegons.push(regon); continue; }
-      const maxId = Math.max(0, ...get().companies.map(c => c.id));
-      const newRow = { id: maxId+1, company: row.company??'', contact: row.contact??'', title: row.title??'', phone: row.phone??'', email: row.email??'', city: row.city??'', state: row.state??'', industry: row.industry??'', revenue: Number(row.revenue)||0, employees: String(row.employees??''), url: row.url??'', nip, regon, notes: String((row as Record<string,unknown>).notes??''), status: 'lead' as const, assigned_to: '' };
-      const { error } = await supabase.from('crm_companies').insert(newRow);
+      const newRow = { company: row.company??'', contact: row.contact??'', title: row.title??'', phone: row.phone??'', email: row.email??'', city: row.city??'', state: row.state??'', industry: row.industry??'', revenue: Number(row.revenue)||0, employees: String(row.employees??''), url: row.url??'', nip, regon, notes: String((row as Record<string,unknown>).notes??''), status: 'lead' as const, assigned_to: '' };
+      const { data: inserted, error } = await supabase.from('crm_companies').insert(newRow).select().single();
       if (error) {
         if (error.code === '23505') { if (error.message.includes('nip')) dupNips.push(nip); else dupRegons.push(regon); }
         else errors++;
-      } else {
-        set(state => ({ companies: [...state.companies, dbRowToCompany(newRow)] }));
+      } else if (inserted) {
+        set(state => ({ companies: [...state.companies, dbRowToCompany(inserted as Record<string,unknown>)] }));
         if (nip) existingNips.add(nip);
         if (regon) existingRegons.add(regon);
         imported++;
